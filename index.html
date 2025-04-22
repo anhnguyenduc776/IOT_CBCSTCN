@@ -369,6 +369,7 @@
                   <path d="M12 2c-2 0-3.6 1.6-3.6 3.6v6a2 2 0 0 0 2 2h3a2 2 0 0 0 2-2v-6C15.6 3.6 14 2 12 2z"/>
                   <path d="M10 14v4h4v-4"/>
                   <path d="M3 6a9 9 0 0 0 0 12m18-12a9 9 0 0 1 0 12"/>
+ TECHNOLOGY
                 </svg>
                 <span>Còi</span>
               </button>
@@ -407,12 +408,12 @@
     const clientId = 'web_client_' + Math.random().toString(16).slice(3);
     const options = {
       clientId,
-      protocol: 'ws',
-      port: 8083,
+      protocol: 'wss', // Sử dụng WSS thay vì WS
+      port: 8084, // Cổng WSS của EMQX
       connectTimeout: 5000,
       keepalive: 60,
     };
-    const client = mqtt.connect('ws://broker.emqx.io:8083/mqtt', options);
+    const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', options);
 
     let mq2Data = [];
     let tempData = [];
