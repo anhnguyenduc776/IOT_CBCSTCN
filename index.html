@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hệ thống cảnh báo cháy sớm trong khu công nghiệp bằng IoT</title>
+  <script src="https://unpkg.com/mqtt@5.0.2/dist/mqtt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(135deg, #2b3a55 0%, #1a263a 100%);
+      color: #ffffff;
+      margin: 0;
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 25px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 15px 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 26px;
+      font-weight: 600;
+      color: #e0e7ff;
+    }
+    .header .nav {
+      display: flex;
+      gap: 15px;
+    }
+    .header .nav button {
+      background: linear-gradient(45deg, #3a4b7a, #5a6a98);
+      border: none;
+      padding: 10px 20px;
+      color: #e0e7ff;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: transform 0.1s ease, box-shadow 0.3s ease;
+    }
+    .header .nav button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    .status {
+      text-align: center;
+      font-size: 14px;
+      color: #ffca28;
+    }
+    .main {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 25px;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+      backdrop-filter: blur(5px);
+    }
+    .card h2 {
+      margin: 0 0 15px;
+      font-size: 20px;
+      font-weight: 500;
+      color: #c7d2fe;
+    }
+    .card p {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 600;
+      color: #ffffff;
+    }
+    .control-panel {
+      grid-column: span 2;
+      background: #ffffff;
+      color: #333;
+      padding: 30px;
+    }
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      gap: 30px;
+    }
+    .control-section {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      width: 50%;
+    }
+    .control-section h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #555;
+    }
+    .control-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+      justify-content: flex-start;
+    }
+    .control-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .control-buttons button {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      color: #ffffff;
+      width: 80px;
+      height: 80px;
+      transition: transform 0.2s ease, box-shadow 0.3s ease, background 0.3s ease;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    .control-buttons button:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+    }
+    .control-buttons button:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    .control-buttons button svg {
+      width: 28px;
+      height: 28px;
+      margin-bottom: 5px;
+      transition: transform 0.2s ease;
+    }
+    .control-buttons button:hover svg {
+      transform: scale(1.15);
+    }
+    .control-buttons button span {
+      font-size: 13px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    .auto {
+      background: linear-gradient(45deg, #c62828, #ef5350);
+    }
+    .auto:hover {
+      background: linear-gradient(45deg, #d32f2f, #f44336);
+    }
+    .auto.active {
+      background: linear-gradient(45deg, #388e3c, #66bb6a);
+    }
+    .auto.active:hover {
+      background: linear-gradient(45deg, #2e7d32, #4caf50);
+    }
+    .auto span {
+      color: #ffebee;
+    }
+    .auto.active span {
+      color: #e8f5e9;
+    }
+    .manual {
+      background: linear-gradient(45deg, #c62828, #ef5350);
+    }
+    .manual:hover {
+      background: linear-gradient(45deg, #d32f2f, #f44336);
+    }
+    .manual.active {
+      background: linear-gradient(45deg, #388e3c, #66bb6a);
+    }
+    .manual.active:hover {
+      background: linear-gradient(45deg, #2e7d32, #4caf50);
+    }
+    .manual span {
+      color: #ffebee;
+    }
+    .manual.active span {
+      color: #e8f5e9;
+    }
+    .device {
+      background: linear-gradient(45deg, #c62828, #ef5350);
+    }
+    .device:hover {
+      background: linear-gradient(45deg, #d32f2f, #f44336);
+    }
+    .device.active {
+      background: linear-gradient(45deg, #388e3c, #66bb6a);
+    }
+    .device.active:hover {
+      background: linear-gradient(45deg, #2e7d32, #4caf50);
+    }
+    .device span {
+      color: #ffebee;
+    }
+    .device.active span {
+      color: #e8f5e9;
+    }
+    canvas {
+      max-height: 150px;
+    }
+    .login-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .login-form {
+      background: linear-gradient(135deg, #3a4b7a, #5a6a98);
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+    .login-form h2 {
+      margin: 0 0 20px;
+      font-size: 24px;
+      color: #e0e7ff;
+    }
+    .login-form input {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+      outline: none;
+    }
+    .login-form input::placeholder {
+      color: #c7d2fe;
+    }
+    .login-form button {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(45deg, #1976d2, #42a5f5);
+      border: none;
+      border-radius: 8px;
+      color: #ffffff;
+      font-size: 16px;
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.3s ease;
+    }
+    .login-form button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    .login-form .error {
+      color: #ef5350;
+      font-size: 14px;
+      margin-top: 10px;
+      display: none;
+    }
+    .login-form .forgot-password {
+      display: block;
+      margin-top: 15px;
+      font-size: 14px;
+      color: #c7d2fe;
+      text-decoration: none;
+      cursor: default;
+    }
+    .login-form .forgot-password:hover {
+      text-decoration: underline;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container" id="loginContainer">
+    <div class="login-form">
+      <h2>Đăng nhập</h2>
+      <input type="text" id="username" placeholder="Tài khoản" autocomplete="off">
+      <input type="password" id="password" placeholder="Mật khẩu">
+      <button onclick="handleLogin()">Đăng nhập</button>
+      <div class="error" id="loginError">Tài khoản hoặc mật khẩu không đúng!</div>
+      <a href="#" class="forgot-password">Quên mật khẩu?</a>
+    </div>
+  </div>
+  <div class="header hidden" id="dashboardHeader">
+    <h1>Hệ thống cảnh báo cháy sớm trong khu công nghiệp bằng IoT</h1>
+    <div class="nav">
+      <button>Accounts</button>
+      <button>Purchases</button>
+      <button>Sessions</button>
+    </div>
+  </div>
+  <div class="status hidden" id="connectionStatus">MQTT Status: Connecting...</div>
+  <div class="main hidden" id="dashboardMain">
+    <div class="card">
+      <h2>MQ-2 Sensor</h2>
+      <p id="mq2">Waiting for data...</p>
+      <canvas id="mq2Chart"></canvas>
+    </div>
+    <div class="card">
+      <h2>Temperature (DS18B20)</h2>
+      <p id="temp">Waiting for data...</p>
+      <canvas id="tempChart"></canvas>
+    </div>
+    <div class="card control-panel">
+      <div class="controls">
+        <div class="control-section">
+          <h3>Chế độ điều khiển</h3>
+          <div class="control-buttons">
+            <div class="control-item">
+              <button class="auto" id="autoButton" onclick="setMode('AUTO')">
+                <svg viewBox="0 0 24 24" fill="#ffffff">
+                  <path d="M12 2a2 2 0 0 1 2 2v2h-4V4a2 2 0 0 1 2-2zm-2 6h4v2h2a2 2 0 0 1 2 2v2h-2v2a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2H6v-2a2 2 0 0 1 2-2h2V8zm-2 6v2h8v-2h-8zm-2 4h12v2H6v-2z"/>
+                </svg>
+                <span>Tự động</span>
+              </button>
+            </div>
+            <div class="control-item">
+              <button class="manual" id="manualButton" onclick="setMode('MANUAL')">
+                <svg viewBox="0 0 24 24" fill="#ffffff">
+                  <path d="M12 2c-1 0-2 .5-2.7 1.3L12 6l-2.7 2.7c-.8-.7-1.3-1.7-1.3-2.7 0-2 1.6-3.6 3.6-3.6S15.6 4 15.6 6c0 1-.5 2-1.3 2.7L12 6l2.7-2.7C15.5 4.7 16 5.7 16 6.7c0 2.2-1.8 4-4 4z"/>
+                  <path d="M12 10c-2 0-3.6 1.6-3.6 3.6 0 1 .5 2 1.3 2.7L12 14l-2.7 2.7c-.8-.7-1.3-1.7-1.3-2.7 0-2 1.6-3.6 3.6-3.6S15.6 12 15.6 14c0 1-.5 2-1.3 2.7L12 14l2.7 2.7c.8-.7 1.3-1.7 1.3-2.7 0-2.2-1.8-4-4-4z"/>
+                </svg>
+                <span>Thủ công</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="control-section">
+          <h3>Điều khiển thiết bị</h3>
+          <div class="control-buttons">
+            <div class="control-item">
+              <button class="device" id="fanButton" onclick="toggleDevice('fan')">
+                <svg viewBox="0 0 24 24" fill="#ffffff">
+                  <path d="M12 2a10 10 0 0 0-7.1 2.9L7 7a7 7 0 0 1 5-2 7 7 0 0 1 5 2l2.1-2.1A10 10 0 0 0 12 2z"/>
+                  <path d="M5 12a7 7 0 0 1 2-5l-2.1-2.1A10 10 0 0 0 2 12h3z"/>
+                  <path d="M12 19a7 7 0 0 1-5-2l-2.1 2.1A10 10 0 0 0 12 22a10 10 0 0 0 7.1-2.9L17 17a7 7 0 0 1-5 2z"/>
+                  <path d="M19 12a7 7 0 0 1-2 5l2.1 2.1A10 10 0 0 0 22 12h-3z"/>
+                </svg>
+                <span>Bơm</span>
+              </button>
+            </div>
+            <div class="control-item">
+              <button class="device" id="pumpButton" onclick="toggleDevice('pump')">
+                <svg viewBox="0 0 24 24" fill="#ffffff">
+                  <path d="M12 2a2 2 0 0 0-2 2v2h4V4a2 2 0 0 0-2-2z"/>
+                  <path d="M12 8c-2 0-3.6 1.6-3.6 3.6 0 1 .5 2 1.3 2.7L12 12l-2.7 2.7c-.8-.7-1.3-1.7-1.3-2.7 0-2 1.6-3.6 3.6-3.6S15.6 10 15.6 12c0 1-.5 2-1.3 2.7L12 12l2.7 2.7c.8-.7 1.3-1.7 1.3-2.7 0-2.2-1.8-4-4-4z"/>
+                  <path d="M10 16h4v4h-4z"/>
+                </svg>
+                <span>Quạt</span>
+              </button>
+            </div>
+            <div class="control-item">
+              <button class="device" id="buzzerButton" onclick="toggleDevice('buzzer')">
+                <svg viewBox="0 0 24 24" fill="#ffffff">
+                  <path d="M12 2c-2 0-3.6 1.6-3.6 3.6v6a2 2 0 0 0 2 2h3a2 2 0 0 0 2-2v-6C15.6 3.6 14 2 12 2z"/>
+                  <path d="M10 14v4h4v-4"/>
+                  <path d="M3 6a9 9 0 0 0 0 12m18-12a9 9 0 0 1 0 12"/>
+                </svg>
+                <span>Còi</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Login Handling
+    function handleLogin() {
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const loginError = document.getElementById('loginError');
+      
+      if (username === 'admin' && password === 'admin') {
+        document.getElementById('loginContainer').classList.add('hidden');
+        document.getElementById('dashboardHeader').classList.remove('hidden');
+        document.getElementById('connectionStatus').classList.remove('hidden');
+        document.getElementById('dashboardMain').classList.remove('hidden');
+        loginError.style.display = 'none';
+      } else {
+        loginError.style.display = 'block';
+      }
+    }
+
+    // Allow Enter key to trigger login
+    document.getElementById('password').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        handleLogin();
+      }
+    });
+
+    // MQTT and Dashboard Logic
+    const clientId = 'web_client_' + Math.random().toString(16).slice(3);
+    const options = {
+      clientId,
+      protocol: 'ws',
+      port: 8083,
+      connectTimeout: 5000,
+      keepalive: 60,
+    };
+    const client = mqtt.connect('ws://broker.emqx.io:8083/mqtt', options);
+
+    let mq2Data = [];
+    let tempData = [];
+    let mq2Labels = [];
+    let tempLabels = [];
+
+    const mq2Chart = new Chart(document.getElementById('mq2Chart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: mq2Labels,
+        datasets: [{
+          label: 'MQ-2 Value',
+          data: mq2Data,
+          borderColor: '#42a5f5',
+          fill: false,
+          tension: 0.4,
+          pointRadius: 3,
+          pointBackgroundColor: '#42a5f5',
+        }]
+      },
+      options: {
+        scales: {
+          y: { beginAtZero: true },
+          x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 5 } }
+        },
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+
+    const tempChart = new Chart(document.getElementById('tempChart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: tempLabels,
+        datasets: [{
+          label: 'Temperature (°C)',
+          data: tempData,
+          borderColor: '#66bb6a',
+          fill: false,
+          tension: 0.4,
+          pointRadius: 3,
+          pointBackgroundColor: '#66bb6a',
+        }]
+      },
+      options: {
+        scales: {
+          y: { beginAtZero: true },
+          x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 5 } }
+        },
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+
+    client.on('connect', () => {
+      document.getElementById('connectionStatus').textContent = 'MQTT Status: Connected';
+      document.getElementById('connectionStatus').style.color = '#66bb6a';
+      console.log('Connected to MQTT broker');
+      client.subscribe(['sensor/mq2', 'sensor/temp', 'sensor/mode', 'sensor/fan', 'sensor/pump', 'sensor/buzzer'], (err) => {
+        if (err) console.error('Subscribe error:', err);
+        else console.log('Subscribed to sensor topics');
+      });
+    });
+
+    client.on('message', (topic, message) => {
+      const value = message.toString();
+      const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      try {
+        if (topic === 'sensor/mq2') {
+          const mq2Value = parseFloat(value);
+          if (!isNaN(mq2Value)) {
+            document.getElementById('mq2').textContent = mq2Value.toFixed(2);
+            mq2Data.push(mq2Value);
+            mq2Labels.push(now);
+            if (mq2Data.length > 10) {
+              mq2Data.shift();
+              mq2Labels.shift();
+            }
+            mq2Chart.data.labels = mq2Labels;
+            mq2Chart.data.datasets[0].data = mq2Data;
+            mq2Chart.update('none');
+          } else {
+            document.getElementById('mq2').textContent = 'Invalid data';
+            console.warn(`Invalid MQ2 data: ${value}`);
+          }
+        } else if (topic === 'sensor/temp') {
+          const tempValue = parseFloat(value);
+          if (!isNaN(tempValue)) {
+            document.getElementById('temp').textContent = `${tempValue.toFixed(2)} °C`;
+            tempData.push(tempValue);
+            tempLabels.push(now);
+            if (tempData.length > 10) {
+              tempData.shift();
+              tempLabels.shift();
+            }
+            tempChart.data.labels = tempLabels;
+            tempChart.data.datasets[0].data = tempData;
+            tempChart.update('none');
+          } else {
+            document.getElementById('temp').textContent = 'Invalid data';
+            console.warn(`Invalid temperature data: ${value}`);
+          }
+        } else if (topic === 'sensor/mode') {
+          if (value === 'AUTO') {
+            document.getElementById('autoButton').classList.add('active');
+            document.getElementById('manualButton').classList.remove('active');
+          } else if (value === 'MANUAL') {
+            document.getElementById('manualButton').classList.add('active');
+            document.getElementById('autoButton').classList.remove('active');
+          } else {
+            console.warn(`Invalid mode data: ${value}`);
+          }
+        } else if (topic === 'sensor/fan') {
+          if (value === 'ON') {
+            document.getElementById('fanButton').classList.add('active');
+          } else if (value === 'OFF') {
+            document.getElementById('fanButton').classList.remove('active');
+          } else {
+            console.warn(`Invalid fan data: ${value}`);
+          }
+        } else if (topic === 'sensor/pump') {
+          if (value === 'ON') {
+            document.getElementById('pumpButton').classList.add('active');
+          } else if (value === 'OFF') {
+            document.getElementById('pumpButton').classList.remove('active');
+          } else {
+            console.warn(`Invalid pump data: ${value}`);
+          }
+        } else if (topic === 'sensor/buzzer') {
+          if (value === 'ON') {
+            document.getElementById('buzzerButton').classList.add('active');
+          } else if (value === 'OFF') {
+            document.getElementById('buzzerButton').classList.remove('active');
+          } else {
+            console.warn(`Invalid buzzer data: ${value}`);
+          }
+        }
+      } catch (error) {
+        console.error(`Error processing MQTT message on topic ${topic}:`, error);
+      }
+    });
+
+    client.on('error', (err) => {
+      document.getElementById('connectionStatus').textContent = `MQTT Status: Connection failed (${err.message})`;
+      document.getElementById('connectionStatus').style.color = '#ef5350';
+      console.error('MQTT error:', err.message, err.stack);
+    });
+
+    client.on('close', () => {
+      document.getElementById('connectionStatus').textContent = 'MQTT Status: Disconnected';
+      document.getElementById('connectionStatus').style.color = '#ef5350';
+      console.log('MQTT Disconnected');
+    });
+
+    function setMode(mode) {
+      if (client.connected) {
+        client.publish('sensor/control/mode', mode);
+        console.log(`Set mode to ${mode}`);
+      } else {
+        alert('Cannot set mode: MQTT client is not connected');
+      }
+    }
+
+    function toggleDevice(device) {
+      if (client.connected) {
+        client.publish(`sensor/control/${device}`, 'toggle');
+        console.log(`Toggled ${device}`);
+      } else {
+        alert('Cannot toggle device: MQTT client is not connected');
+      }
+    }
+  </script>
+</body>
+</html>
